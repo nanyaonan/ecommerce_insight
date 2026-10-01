@@ -1,4 +1,5 @@
 # app/main.py
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI
 from sqlalchemy import create_engine, func, Integer, String, DateTime, DECIMAL
@@ -29,6 +30,34 @@ def list_categories():
         sale_data={s[0]:s[1] for s in sales}
         logger.info([(s[0],s[1])for s in sales])
         return [{"id":p.id, "name": p.prd_name,"sales": sale_data.get(p.id)} for p in rows]
+
+    finally:
+        session.close()
+
+
+@app.get("/api/gmv")
+def sum_gmv(start: str|None=None, end: str |None = None):
+    session = Session()
+    try:
+        start=session.query(func.min(Orders.order_time)).scalar() if start is None else datetime.strptime(start, '%Y-%m-%d')
+        end=session.query(func.max(Orders.order_time)).scalar() if end is None else datetime.strptime(end, '%Y-%m-%d')
+
+        gmv=session.query(func.sum(Orders.amount)).filter(Orders.order_time>=start
+                                                                  ,Orders.order_time<=end
+                                                          ,Orders.status=='已完成').scalar()
+        count = session.query(func.count(Orders.id)).filter(Orders.order_time >= start
+                                                            , Orders.order_time <= end).scalar()
+        done_cnt = session.query(func.count(Orders.id)).filter(
+            Orders.order_time >= start, Orders.order_time <= end,
+            Orders.status == '已完成').scalar()
+
+        return {
+            "start_date": start.strftime("%Y-%m-%d"),
+            "end_date": end.strftime("%Y-%m-%d"),
+            "gmv": gmv or 0,
+            "order_cnt": count,
+            "avg_amount": round(float(gmv or 0) / done_cnt, 2) if done_cnt else 0,
+        }
 
     finally:
         session.close()
