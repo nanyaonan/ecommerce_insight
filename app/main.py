@@ -113,11 +113,8 @@ def get_top(start: str|None=None, end: str|None=None, n:int =8):
                                                                   ,Orders.order_time<=end
                                                           ,Orders.status=='已完成').group_by(Orders.prd_id).order_by(func.sum(Orders.amount).desc(),func.count(Orders.id).desc())
                .limit(max(n,1)).all())
-        sales_dict={s[0]:(s[1],s[2]) for s in sales}
         result=[]
         for i,s in enumerate(sales,1):
-            if i>n:
-                return result
             result.append({
                 "rank":i,
                 "name":id_to_name.get(s[0]),
