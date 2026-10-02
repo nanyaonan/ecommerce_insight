@@ -15,8 +15,9 @@ engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 Base = declarative_base()
 
-# 三个模型照搬gen_data.py里的定义（ProductType/Orders/Reports）
-# ...
+_session =Session()
+id_to_name ={p.id:p.prd_name for p in _session.query(ProductType).all()}
+_session.close()
 
 app = FastAPI(title="电商经营数据洞察API")
 
@@ -40,7 +41,7 @@ def sum_gmv(start: str|None=None, end: str |None = None):
     session = Session()
     try:
         start=session.query(func.min(Orders.order_time)).scalar() if start is None else datetime.strptime(start, '%Y-%m-%d')
-        end=session.query(func.max(Orders.order_time)).scalar() if end is None else datetime.strptime(end, '%Y-%m-%d')
+        end=session.query(func.max(Orders.order_time)).scalar() if end is None else datetime.strptime(end, '%Y-%m-%d')+timedelta(days=1,seconds=-1)
 
         gmv=session.query(func.sum(Orders.amount)).filter(Orders.order_time>=start
                                                                   ,Orders.order_time<=end
@@ -57,7 +58,75 @@ def sum_gmv(start: str|None=None, end: str |None = None):
             "gmv": gmv or 0,
             "order_cnt": count,
             "avg_amount": round(float(gmv or 0) / done_cnt, 2) if done_cnt else 0,
+            # Decimal 不能直接进 JSON，要 float() 转一道
         }
 
+    finally:
+        session.close()
+
+
+#趋势查询
+@app.get("/api/trend")
+def get_trend(start: str|None=None, end: str|None=None):
+    session = Session()
+    try:
+        start=session.query(func.min(Orders.order_time)).scalar() if start is None else datetime.strptime(start, '%Y-%m-%d')
+        end=session.query(func.max(Orders.order_time)).scalar() if end is None else datetime.strptime(end, '%Y-%m-%d')+timedelta(days=1,seconds=-1)
+
+        gmv=session.query(func.date(Orders.order_time),func.sum(Orders.amount)).filter(Orders.order_time>=start
+                                                                  ,Orders.order_time<=end
+                                                          ,Orders.status=='已完成').group_by(func.date(Orders.order_time)).all()
+        count = (session.query(func.date(Orders.order_time),func.count(Orders.id)).filter(Orders.order_time >= start
+                                                            , Orders.order_time <= end).group_by(func.date(Orders.order_time)).order_by(func.date(Orders.order_time)).all())
+        done_cnt = session.query(func.date(Orders.order_time),func.count(Orders.id)).filter(
+            Orders.order_time >= start, Orders.order_time <= end,
+            Orders.status == '已完成').group_by(func.date(Orders.order_time)).all()
+        gmv_dict={g[0]:g[1] for g in gmv}
+        count_dict={g[0]:g[1] for g in count}
+        done_cnt_dict={g[0]:g[1] for g in done_cnt}
+        result=[]
+        for k,v in count_dict.items():
+            result.append({
+                "date":k.strftime("%Y-%m-%d"),
+                "gmv":float(gmv_dict.get(k,0)),
+                "order_count":v,
+                "order_count_done":done_cnt_dict.get(k,0),
+                "avg_amount":round(float(gmv_dict.get(k,0))/ done_cnt_dict.get(k,0),2) if done_cnt_dict.get(k,0) else 0
+            })
+
+        # print (result)
+        return result
+    finally:
+        session.close()
+
+
+
+#返回topN的品类销售额和销量
+@app.get("/api/topn")
+def get_top(start: str|None=None, end: str|None=None, n:int =8):
+    session = Session()
+    try:
+        start=session.query(func.min(Orders.order_time)).scalar() if start is None else datetime.strptime(start, '%Y-%m-%d')
+        end=session.query(func.max(Orders.order_time)).scalar() if end is None else datetime.strptime(end, '%Y-%m-%d')+timedelta(days=1,seconds=-1)
+
+        sales=(session.query(Orders.prd_id,func.sum(Orders.amount),func.count(Orders.id)).filter(Orders.order_time>=start
+                                                                  ,Orders.order_time<=end
+                                                          ,Orders.status=='已完成').group_by(Orders.prd_id).order_by(func.sum(Orders.amount).desc(),func.count(Orders.id).desc())
+               .limit(max(n,1)).all())
+        sales_dict={s[0]:(s[1],s[2]) for s in sales}
+        result=[]
+        for i,s in enumerate(sales,1):
+            if i>n:
+                return result
+            result.append({
+                "rank":i,
+                "name":id_to_name.get(s[0]),
+                "gmv":float(s[1] or 0),
+                "order_count":s[2],
+                "avg_amount":round (float(s[1] or 0)/ s[2],2) if  s[2] else 0
+            })
+
+        # print (result)
+        return result
     finally:
         session.close()
