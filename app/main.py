@@ -1,6 +1,5 @@
 # app/main.py
 
-from collections import defaultdict
 from datetime import datetime, timedelta
 
 from fastapi import FastAPI
