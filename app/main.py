@@ -129,6 +129,7 @@ def get_top(start: str|None=None, end: str|None=None, n:int =8):
             result.append({
                 "name":id_to_name.get(s[0]),
                 "gmv":float(s[1] or 0),
+                "rank":i,
                 "order_count":s[2],
                 "avg_amount":round (float(s[1] or 0)/ s[2],2) if  s[2] else 0
             })
@@ -158,7 +159,6 @@ def get_insight(start: str|None=None, end: str|None=None):
         total_count = (session.query(func.count(Orders.id))
                  .filter(Orders.order_time >= start, Orders.order_time <= end)
                  .scalar())
-        r=defaultdict()
         r={
             "start_date": start.strftime("%Y-%m-%d"),
             "end_date": end.strftime("%Y-%m-%d"),
@@ -184,7 +184,6 @@ def get_insight(start: str|None=None, end: str|None=None):
             },
             timeout=60,
         )
-        logger.info(f"key前8位: {os.getenv('DEEPSEEK_API_KEY', '没读到!')[:8]}")
 
         if resp.status_code == 200:
             r["insight"]=resp.json()["choices"][0]["message"]["content"]
@@ -195,11 +194,3 @@ def get_insight(start: str|None=None, end: str|None=None):
         return r
     finally:
         session.close()
-    # {
-    #     "start_date": start.strftime("%Y-%m-%d"),
-    #     "end_date": end.strftime("%Y-%m-%d"),
-    #     "gmv": gmv or 0,
-    #     "order_cnt": count,
-    #     "avg_amount": round(float(gmv or 0) / done_cnt, 2) if done_cnt else 0,
-    #     # Decimal 不能直接进 JSON，要 float() 转一道
-    # }
