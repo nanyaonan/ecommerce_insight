@@ -36,3 +36,13 @@ class Reports(Base):
     top_products = Column(String(200))
     report_text = Column(String(1000))
 
+from pydantic import BaseModel
+
+class OrderIn(BaseModel):
+    prd_id: int
+    amount: float
+    status: str='已完成'
+
+class AskIn(BaseModel):
+    question:str
+    top_k:int

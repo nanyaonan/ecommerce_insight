@@ -1,12 +1,13 @@
 # app/main.py
-
+import keyword
+from collections import Counter
 from datetime import datetime, timedelta
 
 from fastapi import FastAPI
 from sqlalchemy import create_engine, func, Integer, String, DateTime, DECIMAL
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
-from app.models import ProductType, Orders
+from app.models import ProductType, Orders, OrderIn, AskIn, Reports
 import logging
 import httpx
 logger = logging.getLogger("uvicorn")
@@ -191,5 +192,91 @@ def get_insight(start: str|None=None, end: str|None=None):
             logger.info(f"DeepSeek返回: status={resp.status_code}, body={resp.text[:500]}")
 
         return r
+    finally:
+        session.close()
+
+@app.post("/api/orders")
+def post_order(order:OrderIn):
+    user_id=1 #先写死
+    session=Session()
+    try:
+        o = Orders(order_time=datetime.now(), prd_id=order.prd_id, amount=order.amount, user_id=user_id,status=order.status)
+        session.add(o)
+        session.commit()
+        session.refresh(o)
+        return {"id":o.id,"message":"已完成"}
+    finally:
+        session.close()
+
+@app.post("/api/rag/ask")
+def post_rag(q: AskIn):
+    session = Session()
+    try:
+        question = q.question
+
+        # ===== ① 程度类：交给 SQL 排序，答案精确且自带出处 =====
+        if "GMV" in question.upper() or "销售额" in question:
+            metric, name, unit = Reports.gmv, "GMV", "元"
+        elif "订单" in question or "单量" in question or "销量" in question or "销售量" in question or "订单量" in question:
+            metric, name, unit = Reports.order_cnt, "订单量", "单"
+        else:
+            metric, name, unit = None, "", ""
+
+        logger.info(metric)
+        if metric is not None:
+            if any(w in question for w in ("最高", "最多", "最大", "最好")):
+                row, deg = session.query(Reports).order_by(metric.desc()).first(), "最高"
+            elif any(w in question for w in ("最低", "最少", "最小", "最差")):
+                row, deg = session.query(Reports).order_by(metric.asc()).first(), "最低"
+            else:
+                row, deg = None, ""
+            if row is not None:
+                value = round(float(row.gmv), 2) if name == "GMV" else row.order_cnt
+                return {
+                    "question": question,
+                    "answer": f"{name}{deg}的是{row.iso_year}年第{row.iso_week}周，为{value}{unit}（结论由数据库排序直接得出）",
+                    "sources": [{"week": f"{row.iso_year}-W{row.iso_week:02d}", "content": row.report_text}],
+                    "mode": "sql-order",
+                }
+
+        # ===== ② 检索：LLM 抽关键词 + LIKE 多词命中 =====
+        resp = httpx.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {os.getenv('DEEPSEEK_API_KEY')}"},
+            json={"model": "deepseek-chat", "messages": [
+                {"role": "system", "content": "从用户问题中提取2-3个用于检索数据库的关键词，只输出关键词，用逗号分隔。"},
+                {"role": "user", "content": question}]},
+            timeout=60,
+        )
+        if resp.status_code != 200:
+            return {"question": question, "answer": "关键词提取服务不可用", "sources": [], "mode": "rag"}
+
+        keywords = [k.strip() for k in resp.json()["choices"][0]["message"]["content"].split(",") if k.strip()]
+        matched, score = {}, Counter()
+        for kw in keywords:
+            for t in session.query(Reports).filter(Reports.report_text.like(f"%{kw}%")).all():
+                matched[t.id] = t
+                score[t.id] += 1
+        hits = [matched[i] for i, _ in score.most_common(q.top_k)]
+        if not hits:
+            hits = session.query(Reports).order_by(Reports.iso_year.desc(), Reports.iso_week.desc()).limit(3).all()
+
+        # ===== ③ 生成：只基于给定材料回答，不许编造 =====
+        materials = "\n\n".join([f"【{t.iso_year}年第{t.iso_week}周】{t.report_text}" for t in hits])
+        resp2 = httpx.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {os.getenv('DEEPSEEK_API_KEY')}"},
+            json={"model": "deepseek-chat", "messages": [
+                {"role": "system", "content": "你只能依据下面提供的材料回答。材料中没有的信息，直接回答'材料中没有相关信息'，不得编造或推测。回答末尾注明依据的是哪一周的材料。"},
+                {"role": "user", "content": f"材料：\n{materials}\n\n问题：{question}"}]},
+            timeout=60,
+        )
+        answer = resp2.json()["choices"][0]["message"]["content"] if resp2.status_code == 200 else "模型服务暂不可用"
+        return {
+            "question": question,
+            "answer": answer,
+            "sources": [{"week": f"{t.iso_year}-W{t.iso_week:02d}", "content": t.report_text} for t in hits],
+            "mode": "rag",
+        }
     finally:
         session.close()

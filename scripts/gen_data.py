@@ -98,7 +98,7 @@ for key, value in sorted(weekly.items()):
 
 session.add_all(repos)
 session.commit()
-# # scripts/gen_data.py 大纲
+# # scripts/gen_data.py 大纲ƒ
 # 1. 品类表：8个品类（女装、数码、家居、美妆、食品、运动、母婴、图书）
 # 2. 10000条订单：订单id、用户id(1~2000)、品类(二八分布)、 80%的订单集中在20%的
 #    金额(对数正态，均值~80元)、时间(近13个月，周末上浮30%)、 我让每个周末日的订单量是工作日的1.3倍
