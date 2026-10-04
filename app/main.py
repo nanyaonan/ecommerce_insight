@@ -250,7 +250,7 @@ def post_rag(q: AskIn):
         )
         if resp.status_code != 200:
             return {"question": question, "answer": "关键词提取服务不可用", "sources": [], "mode": "rag"}
-
+        logger.info(resp.json()["choices"][0]["message"]["content"].split(","))
         keywords = [k.strip() for k in resp.json()["choices"][0]["message"]["content"].split(",") if k.strip()]
         matched, score = {}, Counter()
         for kw in keywords:
