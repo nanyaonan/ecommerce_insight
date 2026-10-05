@@ -44,6 +44,7 @@ def test_topn_品类排序正确(client):
 
 def test_insight_mock失败路径返回值(client):
     r = client.get("/api/insight")
+
     assert r.status_code == 200
     d = r.json()
     assert {'start_date', 'end_date', 'gmv', 'order_count_done', 'total_count','top_category','insight'} <= d.keys()
