@@ -4,12 +4,13 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.models import ProductType, Orders,Reports
-
+from dotenv import load_dotenv
+load_dotenv()
 
 # DEFAULT_DATABASE_URL = "postgresql://apple:apple@127.0.0.1:5432/ecommerce_insight"
 
 
-DATABASE_URL = os.getenv("DATABASE_URL",DEFAULT_DATABASE_URL)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 Base = declarative_base()
 
@@ -21,6 +22,7 @@ Base.metadata.create_all(engine)
 
 session.query(Orders).delete()
 session.query(Reports).delete()
+session.query(ProductType).delete()
 session.commit()
 products =[
     ProductType(prd_name='女装'),
@@ -33,8 +35,8 @@ products =[
     ProductType(prd_name='图书')
 ]
 
-# session.add_all(products)
-# session.commit()
+session.add_all(products)
+session.commit()
 
 name_to_id ={p.prd_name:p.id for p in session.query(ProductType).all()}
 id_to_name = {v: k for k, v in name_to_id.items()}
