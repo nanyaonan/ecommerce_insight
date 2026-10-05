@@ -195,7 +195,7 @@ def get_insight(start: str|None=None, end: str|None=None):
     finally:
         session.close()
 
-@app.post("/api/orders")
+@app.post("/api/orders", status_code=201)
 def post_order(order:OrderIn):
     user_id=1 #先写死
     session=Session()

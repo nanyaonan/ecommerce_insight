@@ -78,6 +78,7 @@ class AskIn(BaseModel):
     question: str
     top_k: int = 3
 ```
+pydantic 会帮助校验字段类型
 
 函数签名里声明 `body: AskIn`，FastAPI 就做三件事：解析 JSON、按类型校验、在 `/docs` 生成示例请求体。**类型不对自动返回 422 并指出哪个字段错了**，不用手写 if。
 
@@ -109,9 +110,9 @@ def sum_gmv(...):
 
 ### 4.5 其他细节
 
-- 创建类接口用 `status_code=201`，比默认 200 更符合 HTTP 语义。
-- `/docs` 是自带的交互测试台，改完代码直接在页面上点，不用 curl。
-- **同一个路由函数不要重名**——Python 后定义的会覆盖先定义的，两个接口碰巧都能用只是框架实现细节，不是正确性。
+- 创建类接口用 `status_code=201`，比默认 200 更符合 HTTP 语义，201可以通过状态码单独统计创建量，以及增强可读性：一眼看出是创建新的。
+- `/docs` 是自带的交互测试台，改完代码直接在页面上点，不用 curl http://127.0.0.1:8000/docs 。
+- **同一个路由函数不要重名**——Python 后定义的会覆盖先定义的。
 
 ---
 
@@ -169,13 +170,13 @@ FROM orders;
 
 ### 7.2 ORM 与查询
 
-| 现象 | 原因 | 解决 |
-|---|---|---|
-| `TypeError: list indices must be integers, not datetime.date` | 查询结果是**元组列表**，却当字典用 `x[k]` 索引；且有两个长得像的变量（`done_cnt` 列表 / `done_dict` 字典）混用 | 区分「列表」和「字典」；字典查可能不存在的键一律用 `.get(k, 0)` |
-| 某天 GMV 取不到键 | 那天全是未完成订单，按状态过滤后该日不出现在结果里 | `.get(k, 0)` 兜底 |
-| 只要一条却拿到列表 | `.all()` 永远返回列表（一条也是长度 1）；`.first()` 给元组；`.scalar()` 给单值 | 多条用 `.all()`、首条用 `.first()`、单值用 `.scalar()` |
-| 手动循环数数截断 TopN | 用 `for` + 计数器模拟 LIMIT | 交给 SQL：`.limit(max(n, 1))`，数据在库里截好再取出来 |
-| 求和多写了 `group_by` | 按天分组的写法串台 | 要总和就纯聚合，要分组才 `group_by` |
+| 现象 | 原因                                                                                                                             | 解决 |
+|---|----------------------------------------------------------------------------------------------------------------------------------|---|
+| `TypeError: list indices must be integers, not datetime.date` | 查询结果是**元组列表**，却当字典用 `x[k]` 索引；且有两个长得像的变量（`done_cnt` 列表 / `done_dict` 字典）混用                   | 区分「列表」和「字典」；字典查可能不存在的键一律用 `.get(k, 0)` |
+| 某天 GMV 取不到键 | 那天全是未完成订单，按状态过滤后该日不出现在结果里                                                                               | `.get(k, 0)` 兜底 |
+| 只要一条却拿到列表 | `.all()` 永远返回列表（一条也是长度 1）；`.first()` 给元组；`.scalar()` 给单值（第一行第一列）；`.one()`用于校验是否恰好返回一条 | 多条用 `.all()`、首条用 `.first()`、单值用 `.scalar()` |
+| 手动循环数数截断 TopN | 用 `for` + 计数器模拟 LIMIT                                                                                                      | 交给 SQL：`.limit(max(n, 1))`，数据在库里截好再取出来 |
+| 求和多写了 `group_by` | 按天分组的写法串台                                                                                                               | 要总和就纯聚合，要分组才 `group_by` |
 
 ### 7.3 Python 语法
 
@@ -232,7 +233,7 @@ FROM orders;
 createdb ecommerce_insight
 
 # 2. 虚拟环境与依赖
-python3 -m venv .venv
+/Users/apple/.workbuddy/binaries/python/versions/3.13.12/bin/python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 

@@ -6,14 +6,14 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from app.models import ProductType, Orders,Reports
 
 
-DEFAULT_DATABASE_URL = "postgresql://apple:apple@127.0.0.1:5432/ecommerce_insight"
+# DEFAULT_DATABASE_URL = "postgresql://apple:apple@127.0.0.1:5432/ecommerce_insight"
 
 
 DATABASE_URL = os.getenv("DATABASE_URL",DEFAULT_DATABASE_URL)
 
 Base = declarative_base()
 
-engine = create_engine(DEFAULT_DATABASE_URL)
+engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 session = Session()
 
