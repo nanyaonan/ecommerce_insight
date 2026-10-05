@@ -37,7 +37,7 @@ app = FastAPI(title="电商经营数据洞察API")
 
 
 
-@app.get("/api/categories")
+@app.get("/api/categories",name ='返回全部品类及每个品类的订单量')
 def list_categories():
     """接口①：返回全部品类及每个品类的订单量"""
     session = Session()
@@ -52,7 +52,7 @@ def list_categories():
         session.close()
 
 
-@app.get("/api/gmv")
+@app.get("/api/gmv", name='按日期汇总销售额')
 def sum_gmv(start: str|None=None, end: str |None = None):
     session = Session()
     try:
@@ -81,7 +81,7 @@ def sum_gmv(start: str|None=None, end: str |None = None):
 
 
 #趋势查询
-@app.get("/api/trend")
+@app.get("/api/trend",name='按天销售趋势查询')
 def get_trend(start: str|None=None, end: str|None=None):
     session = Session()
     try:
@@ -115,7 +115,7 @@ def get_trend(start: str|None=None, end: str|None=None):
 
 
 #返回topN的品类销售额和销量
-@app.get("/api/topn")
+@app.get("/api/category/topn", name='按日期汇总返回topN的品类销售额和销量')
 def get_top(start: str|None=None, end: str|None=None, n:int =8):
     session = Session()
     try:
@@ -142,7 +142,7 @@ def get_top(start: str|None=None, end: str|None=None, n:int =8):
 
 #经营数据AI解读
 
-@app.get("/api/insight")
+@app.get("/api/insight", name="按日期汇总解读经营数据")
 def get_insight(start: str|None=None, end: str|None=None):
     session = Session()
     try:
@@ -195,7 +195,7 @@ def get_insight(start: str|None=None, end: str|None=None):
     finally:
         session.close()
 
-@app.post("/api/orders", status_code=201)
+@app.post("/api/orders", status_code=201, name ='增加订单')
 def post_order(order:OrderIn):
     user_id=1 #先写死
     session=Session()
