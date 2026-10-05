@@ -169,7 +169,7 @@ def get_insight(start: str|None=None, end: str|None=None):
         }
         ratio=round((float(sales[1] or 0)/r.get('gmv') if r.get('gmv') !=0 else 0)*100,2)
         logger.info (r)
-        content=(f"时间范围{r.get('start_date')}至{r.get('end_date')}：GMV共{r.get('gmv')}元，订单{r.get('total_count')}单，其中已完成{r.get('order_count')}单"
+        content=(f"时间范围{r.get('start_date')}至{r.get('end_date')}：GMV共{r.get('gmv')}元，订单{r.get('total_count')}单，其中已完成{r.get('order_count_done')}单"
                  f"，销售额第一名是{r.get('top_category')}（占比{ratio}%）")
         logger.info( content)
         resp = httpx.post(
