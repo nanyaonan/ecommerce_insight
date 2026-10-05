@@ -71,7 +71,7 @@ def sum_gmv(start: str|None=None, end: str |None = None):
             "start_date": start.strftime("%Y-%m-%d"),
             "end_date": end.strftime("%Y-%m-%d"),
             "gmv": gmv or 0,
-            "order_cnt": count,
+            "total_count": count,
             "avg_amount": round(float(gmv or 0) / done_cnt, 2) if done_cnt else 0,
             # Decimal 不能直接进 JSON，要 float() 转一道
         }
@@ -102,7 +102,7 @@ def get_trend(start: str|None=None, end: str|None=None):
             result.append({
                 "date":k.strftime("%Y-%m-%d"),
                 "gmv":float(gmv_dict.get(k,0)),
-                "order_count":v,
+                "total_count":v,
                 "order_count_done":done_cnt_dict.get(k,0),
                 "avg_amount":round(float(gmv_dict.get(k,0))/ done_cnt_dict.get(k,0),2) if done_cnt_dict.get(k,0) else 0
             })
@@ -163,7 +163,7 @@ def get_insight(start: str|None=None, end: str|None=None):
             "start_date": start.strftime("%Y-%m-%d"),
             "end_date": end.strftime("%Y-%m-%d"),
             "gmv":float(gmv or 0),
-            "order_count":count,
+            "order_count_done":count,
             "total_count":total_count,
             "top_category":id_to_name.get(sales[0]),
         }
