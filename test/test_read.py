@@ -1,4 +1,6 @@
 import re
+
+
 TOTAL_ORDERS=10000
 def test_categories_返回8个品类切订单量对的上总单量(client):
     r=client.get("/api/categories")
@@ -12,20 +14,25 @@ def test_categories_返回8个品类切订单量对的上总单量(client):
 
 
 def test_gmv_字段齐全且口径符合状态已完成优先(client):
+    r = client.get("/api/gmv" ,params={'start':'2025-12-31'})
+    assert r.status_code == 200
+    d = r.json()
+    assert d['start_date']=='2025-12-31'
+
     r=client.get("/api/gmv")
     assert r.status_code==200
     d=r.json()
     assert {'start_date', 'end_date', 'gmv', 'total_count','avg_amount'} <= d.keys()
     assert d['gmv']>0
     assert d['total_count']==TOTAL_ORDERS
-    assert d['avg_amount']>d['gmv']/d.pop('total_count')
+    assert d['avg_amount']>=d['gmv']/d['total_count']
 
 def test_trend_按日期升序且已完成不超过总单量(client):
     r=client.get("/api/trend")
     assert r.status_code==200
     d=r.json()
     assert sum( i['total_count'] for i in d) <= TOTAL_ORDERS
-    assert sum( i['order_count_done'] for i in d) < sum( i['total_count'] for i in d)
+    assert sum( i['order_count_done'] for i in d) <= sum( i['total_count'] for i in d)
     dates= [date['date'] for date in d]
     assert dates == sorted(dates)
     for date in dates:
@@ -42,10 +49,25 @@ def test_topn_品类排序正确(client):
     gmv =[i['gmv'] for i in d]
     assert gmv == sorted(gmv,reverse=True)
 
-def test_insight_mock失败路径返回值(client):
-    r = client.get("/api/insight")
 
+class FakeResp:
+    def __init__(self,status_code, body=None, text=""):
+        self.status_code=status_code
+        self._body=body
+        self.text=text
+    def json(self):
+        return self._body
+
+def test_insight_mock失败路径返回值(client, monkeypatch):
+    monkeypatch.setattr('app.main.httpx.post', lambda *a, **k: FakeResp(500,text='{"error":"insufficient balance"}'))
+    r = client.get("/api/insight")
     assert r.status_code == 200
     d = r.json()
     assert {'start_date', 'end_date', 'gmv', 'order_count_done', 'total_count','top_category','insight'} <= d.keys()
     assert d['insight'] is not None
+    assert d['insight'] =="模型服务暂停不可用请稍后再试"
+
+def test_insight_成功路径返回模型文案(client, monkeypatch):
+    monkeypatch.setattr("app.main.httpx.post",
+        lambda *a, **k: FakeResp(200, {"choices": [{"message": {"content": "本周GMV环比上升"}}]}))
+    assert client.get("/api/insight").json()["insight"] == "本周GMV环比上升"

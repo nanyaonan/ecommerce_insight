@@ -1,6 +1,5 @@
 import os
 import pytest
-from fastapi import testclient
 from starlette.testclient import TestClient
 
 os.environ.setdefault("DATABASE_URL", "postgresql://apple:apple@127.0.0.1:5432/ecommerce_insight")
