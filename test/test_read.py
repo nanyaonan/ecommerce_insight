@@ -71,3 +71,34 @@ def test_insight_成功路径返回模型文案(client, monkeypatch):
     monkeypatch.setattr("app.main.httpx.post",
         lambda *a, **k: FakeResp(200, {"choices": [{"message": {"content": "本周GMV环比上升"}}]}))
     assert client.get("/api/insight").json()["insight"] == "本周GMV环比上升"
+
+
+def test_overview(client):
+    r=client.get("/api/overview",params={'start':'2025-12-31','end':'2026-03-31','n':5})
+    assert r.status_code == 200
+    r2=client.get("/api/gmv" ,params={'start':'2025-12-31','end':'2026-03-31'})
+    r3=client.get("/api/trend" ,params={'start':'2025-12-31','end':'2026-03-31'})
+
+    d=r.json()
+    d2=r2.json()
+    d3=r3.json()
+    assert {'start_date','end_date','gmv','total_count','trend','top_categories'} <= d.keys()
+    assert d['gmv']==d2['gmv']
+    assert d['trend']==d3
+    assert [i['rank'] for i in d['top_categories']] == [1,2,3,4,5]
+
+import time
+def test_overview(client, monkeypatch):
+    def slow(*a, **k):
+        time.sleep(1)
+        return {}
+    monkeypatch.setattr("app.main._q_summary",slow)
+    monkeypatch.setattr("app.main._q_trend",slow)
+    monkeypatch.setattr("app.main._q_topn",slow)
+
+    t0=time.time()
+    r=client.get("/api/overview")
+    dt=time.time()-t0
+
+    assert r.status_code == 200
+    assert dt<2

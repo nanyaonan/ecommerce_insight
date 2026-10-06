@@ -100,14 +100,3 @@ for key, value in sorted(weekly.items()):
 
 session.add_all(repos)
 session.commit()
-# # scripts/gen_data.py 大纲ƒ
-# 1. 品类表：8个品类（女装、数码、家居、美妆、食品、运动、母婴、图书）
-# 2. 10000条订单：订单id、用户id(1~2000)、品类(二八分布)、 80%的订单集中在20%的
-#    金额(对数正态，均值~80元)、时间(近13个月，周末上浮30%)、 我让每个周末日的订单量是工作日的1.3倍
-#    状态(已完成88%/已取消7%/退款5%)
-# 3. 130篇周报：每周汇总GMV、单量、Top品类，写成短文本段
-# 4. 输出：data/orders.csv + data/reports.csv
-
-# psql -d ecommerce_insight -c "SELECT count(*) FROM orders;"
-# psql -d ecommerce_insight -c "SELECT round(avg(amount),2) FROM orders;"
-# psql -d ecommerce_insight -c "SELECT count(*) FROM orders WHERE extract(dow from order_time) IN (0,6);"
