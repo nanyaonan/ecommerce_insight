@@ -88,7 +88,7 @@ def test_overview(client):
     assert [i['rank'] for i in d['top_categories']] == [1,2,3,4,5]
 
 import time
-def test_overview(client, monkeypatch):
+def test_overview_并发(client, monkeypatch):
     def slow(*a, **k):
         time.sleep(1)
         return {}
