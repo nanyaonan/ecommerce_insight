@@ -121,16 +121,12 @@ app = FastAPI(title="电商经营数据洞察API")
 
 @app.get("/api/overview",name='经营总览：汇总＋趋势＋TopN三查询并行')
 async def get_overview(start:str|None=None, end:str|None=None, n:int = 5):
-    s=Session()
-    try:
-        summary, trend, topn = await asyncio.gather(
-            run_in_threadpool(_q_summary, start, end),
-            run_in_threadpool(_q_trend, start, end),
-            run_in_threadpool(_q_topn, start, end, n)
-        )
-        return {**summary, "trend": trend, "top_categories": topn}
-    finally:
-        s.close()
+    summary, trend, topn = await asyncio.gather(
+        run_in_threadpool(_q_summary, start, end),
+        run_in_threadpool(_q_trend, start, end),
+        run_in_threadpool(_q_topn, start, end, n)
+    )
+    return {**summary, "trend": trend, "top_categories": topn}
 
 
 
