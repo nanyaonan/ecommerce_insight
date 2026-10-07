@@ -68,6 +68,7 @@ def get_top(start: str | None = None, end: str | None = None, n: int = 8):
 - 装饰器 `@app.get("路径")` 把普通函数变成接口，**路径必须带前导斜杠**（写成 `"api/topn"` 是 404）。
 - 查询参数直接写在函数签名里：带默认值 = 可选参数；不写默认值 = 必填（漏传会 422）。
 - `start: str | None = None` 这种写法，FastAPI 会自动在 `/docs` 里标注为可选项。
+- **装饰器必须紧贴函数定义**：`@app.get("...")` 和 `def` 之间隔了空行，装饰器就会叠到下一个函数头上——不报错，但路由悄悄挂错。本项目 `/api/overview` 曾因此挂到 `list_categories` 上，请求它返回的是品类列表。
 
 ### 4.2 请求体用 Pydantic 模型接
 
@@ -114,6 +115,58 @@ def sum_gmv(...):
 - `/docs` 是自带的交互测试台，改完代码直接在页面上点，不用 curl http://127.0.0.1:8000/docs 。
 - **同一个路由函数不要重名**——Python 后定义的会覆盖先定义的。
 
+### 4.6 同步 def 与异步 async def：只在 I/O 等待处用异步
+
+同一个路由函数，写成 `def` 还是 `async def`，调度方式完全不同：
+
+- **`def`（同步）**：FastAPI 把它丢进**线程池**执行，不占事件循环，函数里阻塞也不影响其他请求。anyio 默认线程池 40 个令牌，并发 ≤40 时同步与异步耗时几乎没差别，要到更高并发才拉开差距。
+- **`async def`（异步）**：跑在**事件循环**里，靠 `await` 让出控制权。所以异步函数里**不能留同步阻塞代码**（同步 SQLAlchemy 查询就是），否则整个事件循环被卡死，比同步写法还慢。
+- 本项目用的是同步 SQLAlchemy，所以异步接口里的查询要显式丢回线程池：`await run_in_threadpool(查询函数)`。
+
+`/api/overview` 就是这么做的——三个互不相干的查询并行跑：
+
+```python
+async def get_overview(start=None, end=None, n=5):
+    summary, trend, topn = await asyncio.gather(
+        run_in_threadpool(q_summary, start, end),
+        run_in_threadpool(q_trend, start, end),
+        run_in_threadpool(q_topn, start, end, n),
+    )
+    return {**summary, "trend": trend, "top_categories": topn}
+```
+
+实测：把三个查询各换成 `sleep(1)`，串行应为 3 秒，`gather` 并行实测 **1.00 秒**（`pytest -k 并发 --durations=1`）。
+
+#### 但并发下是反的：这是延迟换吞吐，不是性能提升
+
+起服务后用 60 并发压测 `/api/overview` 与同步的 `/api/gmv`：
+
+| 并发 | `/api/gmv`（同步 `def`） | `/api/overview`（异步 + 线程池） |
+|---|---|---|
+| 10 | 0.63s | 2.24s |
+| 30 | 0.72s | 3.36s |
+| 60 | 0.59s | **4.98s** |
+
+异步接口反而慢 3.5～8 倍。根因：同步请求一次占 **1 个**线程池令牌，overview 一次并发三个查询占 **3 个**，anyio 默认 40 个令牌——**约 14 个并发请求就把线程池抽干**，后面的全排队。
+
+所以准确的说法是：**单请求延迟降 3 倍，多请求吞吐掉到约 1/8**。要真上量得换 asyncpg 走全链路 `await`，数据库连接不再占线程；短期只能调大 `anyio.to_thread.current_default_thread_limiter().total_tokens`，但那只是把瓶颈往后推。
+
+#### 附：什么是"阻塞"（20 并发，每个任务 1 秒）
+
+| 写法 | 总耗时 | 吞吐 |
+|---|---|---|
+| `async def` + `time.sleep(1)` | 20.11s | 1.0 req/s |
+| `async def` + 同步 `httpx.get` 调外部 API | 20.44s | 1.0 req/s |
+| `async def` + `await asyncio.sleep(1)` | 1.03s | 19.5 req/s |
+| `async def` + `await run_in_threadpool(...)` | 1.06s | 18.9 req/s |
+| `def`（FastAPI 自动丢线程池） | 1.04s | 19.3 req/s |
+
+最直观的证据是**传染**：1 个慢请求 + 5 个 `/health`（纯 CPU，正常 0.01 秒）同时打，`async def` 里同步阻塞时 `/health` 被拖慢 **400 倍**；改成 `await` 或 `run_in_threadpool` 后只有 3～5 倍，属于噪声。绝对值取决于探针发出的时机，判定只看倍数（`python scripts/block_demo.py` 可复现）。一个毫不相干的接口被拖慢两个数量级——这就是事件循环被独占。
+
+推论：本项目 8 个路由里只有 `/api/overview` 是 `async def`，其余全是 `def`，安全。**谁把 `/api/insight`、`/api/rag/ask` 改成 `async def` 而不把 `httpx.post` 换成 `AsyncClient`，整站会立刻掉到 1 req/s。**
+
+值不值得上异步，判据只有一条：**时间是不是花在等 I/O 上**（等数据库、等外部 API、等文件读写）。纯 CPU 计算改成异步不会变快，因为 GIL 之下它根本没有"让出"的机会。
+
 ---
 
 ## 五、接口清单
@@ -123,10 +176,11 @@ def sum_gmv(...):
 | ① | GET | `/api/categories` | — | 全部品类及各品类订单量 |
 | ② | GET | `/api/gmv` | `start`、`end`（可选） | 大盘 GMV、订单数、客单价 |
 | ③ | GET | `/api/trend` | `start`、`end`（可选） | 逐日 GMV 与订单趋势 |
-| ④ | GET | `/api/topn` | `start`、`end`、`n`（默认 8） | GMV TopN 品类排行榜 |
+| ④ | GET | `/api/category/topn` | `start`、`end`、`n`（默认 8） | GMV TopN 品类排行榜 |
 | ⑤ | GET | `/api/insight` | `start`、`end`（可选） | AI 经营解读（实验） |
 | ⑥ | POST | `/api/orders` | 请求体 `prd_id`、`amount`、`status` | 下单写库，返回新订单 id |
 | ⑦ | POST | `/api/rag/ask` | 请求体 `question`、`top_k` | 周报问答（实验，效果一般） |
+| ⑧ | GET | `/api/overview` | `start`、`end`、`n`（默认 5） | 汇总＋趋势＋TopN 三查询并行，异步接口 |
 
 全项目 GMV 口径统一：**只统计「已完成」订单**，五个接口的数字互相印证。
 
@@ -264,7 +318,9 @@ open http://127.0.0.1:8000/docs
 | session 管理 | 手写 `try/finally` | 改用 FastAPI `Depends` 依赖注入 |
 | 配置读取 | `os.getenv` + dotenv | 可换 pydantic-settings 统一管配置 |
 | 检索方式 | 关键词 `LIKE` | 规模上去后换向量检索 |
-| 测试 | 靠 `/docs` 手工测 | 补 pytest 用例 |
+| 测试 | 10 条 pytest 用例覆盖 6 个接口；`/api/rag/ask` 未覆盖——单次请求内两次 LLM 调用且 URL 相同，mock 得按 system 提示词分派，耦合文案 | 把 LLM 调用抽成单一出口 `call_deepseek()`，只对出口做 mock，成本立刻降下来 |
+| 异步范围 | 仅 `/api/overview` 走异步，其余接口同步跑线程池 | 数据库换 async driver 后再全量异步化 |
+| 异步吞吐 | 单请求延迟降 3 倍（3s→1s），但 60 并发下吞吐只有同步接口的约 1/8（线程池 40 令牌被 3 倍消耗） | 换 asyncpg 走全链路 `await`，连接不再占线程；见 4.6 实测数据 |
 | 项目结构 | 路由全在 `main.py` | 拆成 router + service 分层 |
 
 ---
@@ -278,6 +334,10 @@ ecommerce_insight/
 │   └── models.py        # ORM 模型 + Pydantic 请求体模型
 ├── scripts/
 │   └── gen_data.py      # 建表 + 造订单 + 生成周报
+├── test/
+│   ├── test_read.py     # 查询类接口 + insight + overview（含并发用例）
+│   └── test_write.py    # 下单接口，带回滚清理
+├── conftest.py          # pytest 的 client fixture，放项目根
 ├── requirements.txt
 ├── .env                 # 本地配置，不入库
 └── .gitignore
