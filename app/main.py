@@ -117,8 +117,9 @@ _session =Session()
 id_to_name ={p.id:p.prd_name for p in _session.query(ProductType).all()}
 _session.close()
 
-app = FastAPI(title="电商经营数据洞察API")
 
+
+app = FastAPI(title="电商经营数据洞察API")
 @app.get("/api/overview",name='经营总览：汇总＋趋势＋TopN三查询并行')
 async def get_overview(start:str|None=None, end:str|None=None, n:int = 5):
     summary, trend, topn = await asyncio.gather(
@@ -127,6 +128,7 @@ async def get_overview(start:str|None=None, end:str|None=None, n:int = 5):
         run_in_threadpool(_q_topn, start, end, n)
     )
     return {**summary, "trend": trend, "top_categories": topn}
+
 
 
 
