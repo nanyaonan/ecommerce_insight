@@ -299,7 +299,7 @@ FROM orders;
 createdb ecommerce_insight
 
 # 2. 虚拟环境与依赖
-/Users/apple/.workbuddy/binaries/python/versions/3.13.12/bin/python3 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
