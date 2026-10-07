@@ -119,7 +119,6 @@ def main():
             slow_th.start()
             # 关键：等慢请求真的进入 sleep、占住循环之后再发探针。
             # 不等这一下的话，5 个 /health 会抢在它前面跑完，测出来全是 0.01s，
-            # 看起来像"没有传染"——假阴性比测不出来更糟。
             time.sleep(0.3)
 
             threads = [threading.Thread(target=hit_health) for _ in range(5)]
