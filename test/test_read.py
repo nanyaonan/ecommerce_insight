@@ -92,9 +92,9 @@ def test_overview_并发(client, monkeypatch):
     def slow(*a, **k):
         time.sleep(1)
         return {}
-    monkeypatch.setattr("app.main._q_summary",slow)
-    monkeypatch.setattr("app.main._q_trend",slow)
-    monkeypatch.setattr("app.main._q_topn",slow)
+    monkeypatch.setattr("app.main.q_summary",slow)
+    monkeypatch.setattr("app.main.q_trend",slow)
+    monkeypatch.setattr("app.main.q_topn",slow)
 
     t0=time.time()
     r=client.get("/api/overview")
