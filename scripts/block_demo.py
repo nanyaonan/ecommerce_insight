@@ -83,17 +83,18 @@ def main():
         print(f"\n=== {CONCURRENCY} 并发打同一个端点（每个任务耗时 1 秒）===\n")
         print(f"{'端点':<24}{'总耗时':>10}{'吞吐':>14}")
         print("-" * 48)
+
         for path in ("/A_block", "/B_async", "/C_thread", "/D_syncdef"):
             t0 = time.time()
-            with httpx.Client(trust_env=False, timeout=60) as c:
-                with cf.ThreadPoolExecutor(CONCURRENCY) as ex:
+            with httpx.Client(trust_env=False, timeout=100) as c:
+                with cf.ThreadPoolExecutor(CONCURRENCY) as ex: # 模拟20个客户同时请求，服务端能同时处理几个
                     codes = list(ex.map(lambda _: c.get(BASE + path).status_code, range(CONCURRENCY)))
             dt = time.time() - t0
             print(f"{path:<24}{dt:>9.2f}s{CONCURRENCY / dt:>11.1f} req/s")
             assert codes.count(200) == CONCURRENCY, "有请求失败，结果不可信"
 
-        print("\n=== 传染测试：1 个慢请求 + 5 个 /health 同时打 ===\n")
-        print(f"{'慢请求':<22}{'/health 最慢一次':>16}{'对比基线':>12}")
+        print("\n=== 传染测试：1 个同步请求 + 5 个 /health 同时打 ===\n")
+        print(f"{'慢请求':<22}{'/health 最慢一次':>16}{'/health正常运行时间':>20}{'对比基线':>12}")
         print("-" * 50)
         # 先测一个"没有慢请求时 /health 要多久"的基线，通常在 0.01s 上下
         with httpx.Client(trust_env=False, timeout=60) as c:
@@ -128,7 +129,7 @@ def main():
                 th.join()
             slow_th.join()
             slow = max(health_cost)
-            print(f"{path:<22}{slow:>14.2f}s{slow / baseline:>10.0f}x")
+            print(f"{path:<22}{slow:>14.2f}s{baseline:>10.0f}s{slow / baseline:>10.0f}x")
 
         print("\n怎么看：A 的总耗时是 B/C/D 的 20 倍，而且把毫不相干的 /health")
         print("拖慢几十倍——探针发出得越早，被拖的时间越长。事件循环是一根绳上的，")
