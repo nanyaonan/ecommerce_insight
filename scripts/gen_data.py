@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-from app.models import ProductType, Orders,Reports
+from app.models import ProductType, Orders,Reports,Users
 from dotenv import load_dotenv
 load_dotenv()
 

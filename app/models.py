@@ -1,5 +1,5 @@
 
-from sqlalchemy import  Column, Integer, String, DateTime, func, DECIMAL
+from sqlalchemy import Column, Integer, String, DateTime, func, DECIMAL, Boolean
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 Base = declarative_base()
@@ -35,6 +35,18 @@ class Reports(Base):
     order_cnt = Column(Integer)
     top_products = Column(String(200))
     report_text = Column(String(1000))
+
+class Users(Base):
+    # """模拟用户表的一条记录。"""
+    """周报表："""
+    __tablename__ = "users"
+    # 用户的唯一标识，必须为正整数。
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    # 登录用户名，长度限制为 3 到 30 个字符。
+    username = Column(String(200))
+    # 用户角色是否管理员。
+    is_admin = Column(Boolean,default=False)
+
 
 from pydantic import BaseModel
 
