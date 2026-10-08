@@ -321,7 +321,7 @@ open http://127.0.0.1:8000/docs
 
 ---
 
-## 十、已知边界与后续
+## 十、后续要做的
 
 | 项 | 现状 | 之后想做的 |
 |---|---|---|
@@ -329,10 +329,6 @@ open http://127.0.0.1:8000/docs
 | `user_id` | 下单接口暂写死为 1 | 同上 |
 | session 管理 | 手写 `try/finally` | 改用 FastAPI `Depends` 依赖注入 |
 | 配置读取 | `os.getenv` + dotenv | 可换 pydantic-settings 统一管配置 |
-| 检索方式 | 关键词 `LIKE` | 规模上去后换向量检索 |
-| 测试 | 10 条 pytest 用例覆盖 6 个接口；`/api/rag/ask` 未覆盖——单次请求内两次 LLM 调用且 URL 相同，mock 得按 system 提示词分派，耦合文案 | 把 LLM 调用抽成单一出口 `call_deepseek()`，只对出口做 mock，成本立刻降下来 |
-| 异步范围 | 仅 `/api/overview` 走异步，其余接口同步跑线程池 | 数据库换 async driver 后再全量异步化 |
-| 异步吞吐 | 单请求延迟在等长场景下降 3 倍（3s→1s，真实数据低于此），但并发下吞吐反而比同步接口慢 5～10 倍（每请求占 3 个线程池令牌 + 干 3 倍工作量） | 换 asyncpg 走全链路 `await`，连接不再占线程；见 4.6 实测数据 |
 | 项目结构 | 路由全在 `main.py` | 拆成 router + service 分层 |
 
 ---
