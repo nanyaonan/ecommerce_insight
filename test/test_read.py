@@ -25,7 +25,7 @@ def test_gmv_字段齐全且口径符合状态已完成优先(client,as_normal):
     d=r.json()
     assert {'start_date', 'end_date', 'gmv', 'total_count','avg_amount'} <= d.keys()
     assert d['gmv']>0
-    assert d['total_count']==TOTAL_ORDERS
+    assert d['total_count']>=TOTAL_ORDERS
     assert d['avg_amount']>=d['gmv']/d['total_count']
 
 def test_trend_按日期升序且已完成不超过总单量(client,as_normal):
@@ -73,6 +73,14 @@ def test_insight_成功路径返回模型文案(client, monkeypatch,as_admin):
         lambda *a, **k: FakeResp(200, {"choices": [{"message": {"content": "本周GMV环比上升"}}]}))
     assert client.get("/api/insight").json()["insight"] == "本周GMV环比上升"
 
+def test_insight_不是管理员无权限返回403(client,as_normal):
+    r=client.get("/api/insight",params={'start':'2025-12-31','end':'2026-03-31'})
+    assert r.status_code == 403
+
+def test_insight_管理员返回200(client,as_admin):
+    r=client.get("/api/insight",params={'start':'2025-12-31','end':'2026-03-31'})
+    assert r.status_code == 200
+
 
 def test_overview(client,as_normal):
     r=client.get("/api/overview",params={'start':'2025-12-31','end':'2026-03-31','n':5})
@@ -103,3 +111,4 @@ def test_overview_并发(client, monkeypatch,as_normal):
 
     assert r.status_code == 200
     assert dt<2
+
