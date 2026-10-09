@@ -1,8 +1,9 @@
 import re
+from conftest import as_admin,as_normal
 
 
 TOTAL_ORDERS=10000
-def test_categories_返回8个品类切订单量对的上总单量(client):
+def test_categories_返回8个品类切订单量对的上总单量(client,as_normal):
     r=client.get("/api/categories")
     assert r.status_code == 200
     data=r.json()
@@ -13,7 +14,7 @@ def test_categories_返回8个品类切订单量对的上总单量(client):
     assert sum(d['sales'] for d in data) == TOTAL_ORDERS
 
 
-def test_gmv_字段齐全且口径符合状态已完成优先(client):
+def test_gmv_字段齐全且口径符合状态已完成优先(client,as_normal):
     r = client.get("/api/gmv" ,params={'start':'2025-12-31'})
     assert r.status_code == 200
     d = r.json()
@@ -27,7 +28,7 @@ def test_gmv_字段齐全且口径符合状态已完成优先(client):
     assert d['total_count']==TOTAL_ORDERS
     assert d['avg_amount']>=d['gmv']/d['total_count']
 
-def test_trend_按日期升序且已完成不超过总单量(client):
+def test_trend_按日期升序且已完成不超过总单量(client,as_normal):
     r=client.get("/api/trend")
     assert r.status_code==200
     d=r.json()
@@ -38,7 +39,7 @@ def test_trend_按日期升序且已完成不超过总单量(client):
     for date in dates:
         assert re.match(r"^\d{4}-\d{2}-\d{2}$",date)
 
-def test_topn_品类排序正确(client):
+def test_topn_品类排序正确(client,as_normal):
     r=client.get("/api/category/topn",params={'n':5})
     assert r.status_code==200
     d=r.json()
@@ -58,7 +59,7 @@ class FakeResp:
     def json(self):
         return self._body
 
-def test_insight_mock失败路径返回值(client, monkeypatch):
+def test_insight_mock失败路径返回值(client, monkeypatch,as_admin):
     monkeypatch.setattr('app.main.httpx.post', lambda *a, **k: FakeResp(500,text='{"error":"insufficient balance"}'))
     r = client.get("/api/insight")
     assert r.status_code == 200
@@ -67,13 +68,13 @@ def test_insight_mock失败路径返回值(client, monkeypatch):
     assert d['insight'] is not None
     assert d['insight'] =="模型服务暂停不可用请稍后再试"
 
-def test_insight_成功路径返回模型文案(client, monkeypatch):
+def test_insight_成功路径返回模型文案(client, monkeypatch,as_admin):
     monkeypatch.setattr("app.main.httpx.post",
         lambda *a, **k: FakeResp(200, {"choices": [{"message": {"content": "本周GMV环比上升"}}]}))
     assert client.get("/api/insight").json()["insight"] == "本周GMV环比上升"
 
 
-def test_overview(client):
+def test_overview(client,as_normal):
     r=client.get("/api/overview",params={'start':'2025-12-31','end':'2026-03-31','n':5})
     assert r.status_code == 200
     r2=client.get("/api/gmv" ,params={'start':'2025-12-31','end':'2026-03-31'})
@@ -88,7 +89,7 @@ def test_overview(client):
     assert [i['rank'] for i in d['top_categories']] == [1,2,3,4,5]
 
 import time
-def test_overview_并发(client, monkeypatch):
+def test_overview_并发(client, monkeypatch,as_normal):
     def slow(*a, **k):
         time.sleep(1)
         return {}

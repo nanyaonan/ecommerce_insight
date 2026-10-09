@@ -1,6 +1,7 @@
 import pytest
 from sqlalchemy import func
 from app.main import Session, Orders
+from conftest import as_admin,as_normal
 
 
 class FakeResp:
@@ -23,14 +24,14 @@ def rollback_orders():
     s.close()
 
 
-def test_orders_创建成功返回201与自增id(client, rollback_orders):
+def test_orders_创建成功返回201与自增id(client, rollback_orders,as_normal):
     r = client.post("/api/orders", json={"prd_id": 27, "amount": 99.9})  # 品类 id 实测是 27-34
     assert r.status_code == 201
     assert r.json()["message"] == "已完成"
     assert isinstance(r.json()["id"], int)
 
 
-def test_orders_缺字段被Pydantic拦成422(client, rollback_orders):
+def test_orders_缺字段被Pydantic拦成422(client, rollback_orders,as_normal):
     assert client.post("/api/orders", json={"prd_id": 27}).status_code == 422
 
 

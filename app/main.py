@@ -180,25 +180,25 @@ def list_categories(session=Depends(get_session),user=Depends(get_current_user))
 
 @app.get("/api/gmv", name='按日期汇总销售额')
 def sum_gmv(start: str|None=None, end: str |None = None,session=Depends(get_session),user=Depends(get_current_user)):
-    q_summary(start,end,session)
+    return q_summary(start,end,session)
 
 
 #趋势查询
 @app.get("/api/trend",name='按天销售趋势查询')
 def get_trend(start: str|None=None, end: str|None=None, session=Depends(get_session),user=Depends(get_current_user)):
-    q_trend(start,end,session)
+    return q_trend(start,end,session)
 
 
 #返回topN的品类销售额和销量
 @app.get("/api/category/topn", name='按日期汇总返回topN的品类销售额和销量')
 def get_top(start: str|None=None, end: str|None=None, n:int =8,session=Depends(get_session),user=Depends(get_current_user)):
-    q_topn(start,end,n,session)
+    return q_topn(start,end,n,session)
 
 
 #经营数据AI解读
 
 @app.get("/api/insight", name="按日期汇总解读经营数据")
-def get_insight(start: str|None=None, end: str|None=None,session=Depends(get_session),user=Depends(get_current_user)):
+def get_insight(start: str|None=None, end: str|None=None,session=Depends(get_session),user=Depends(require_admin)):
     start, end = resolve_range(session, start, end)
     gmv = (session.query( func.sum(Orders.amount))
            .filter(Orders.order_time >= start, Orders.order_time <= end,Orders.status == '已完成').scalar())
@@ -221,10 +221,8 @@ def get_insight(start: str|None=None, end: str|None=None,session=Depends(get_ses
         "top_category":id_to_name.get(sales[0]),
     }
     ratio=round((float(sales[1] or 0)/r.get('gmv') if r.get('gmv') !=0 else 0)*100,2)
-    logger.info (r)
     content=(f"时间范围{r.get('start_date')}至{r.get('end_date')}：GMV共{r.get('gmv')}元，订单{r.get('total_count')}单，其中已完成{r.get('order_count_done')}单"
              f"，销售额第一名是{r.get('top_category')}（占比{ratio}%）")
-    logger.info( content)
     resp = httpx.post(
         "https://api.deepseek.com/chat/completions",
         headers={"Authorization":f"Bearer {os.getenv('DEEPSEEK_API_KEY')}"},
@@ -250,7 +248,6 @@ def get_insight(start: str|None=None, end: str|None=None,session=Depends(get_ses
 @app.get("/api/me/order")
 def getuser_list_order(user=Depends(get_current_user),session=Depends(get_session)):
     orders=session.query(Orders).filter(Orders.user_id == user.id).all()
-    logger.info (orders)
     result =[]
     for o in orders:
         result.append({
@@ -259,7 +256,6 @@ def getuser_list_order(user=Depends(get_current_user),session=Depends(get_sessio
             "prd_name":id_to_name.get(o.prd_id),
             "amount":o.amount
         })
-    logger.info (result)
     return result
 
 @app.post("/api/orders", status_code=201, name ='增加订单')

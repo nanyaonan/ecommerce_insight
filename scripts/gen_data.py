@@ -40,7 +40,7 @@ session.commit()
 
 users =[
     Users( username='admin', is_admin=True, api_key=secrets.token_hex(32)),
-    Users( username='yn', is_admin=False, api_key=secrets.token_hex(32))
+    Users( username='yn', is_admin=False, api_key=secrets.token_hex(32)),
 ]
 session.add_all(users)
 session.commit()
