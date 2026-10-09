@@ -3,21 +3,21 @@ import asyncio
 from collections import Counter
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI
+from fastapi import FastAPI,Header,Depends,HTTPException,status
 from fastapi.concurrency import run_in_threadpool
-from fastapi.params import Depends
-from sqlalchemy import create_engine, func, Integer, String, DateTime, DECIMAL
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
-from app.models import ProductType, Orders, OrderIn, AskIn, Reports
+from app.models import ProductType, Orders, OrderIn, AskIn, Reports, Users
 import logging
 import httpx
 logger = logging.getLogger("uvicorn")
 from dotenv import load_dotenv
 load_dotenv()
+from fastapi.security import APIKeyHeader
+api_key_header=APIKeyHeader(name='X-API-Key',auto_error=False)
 
-def q_summary(start,end):
-    session = Session()
+def q_summary(start,end,session=None):
     try:
         start, end = resolve_range(session, start, end)
 
@@ -109,7 +109,7 @@ def resolve_range(session, start, end):
     e = session.query(func.max(Orders.order_time)).scalar() if end is None else datetime.strptime(end, '%Y-%m-%d') + timedelta(days=1, seconds=-1)
     return s, e
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://apple:apple@127.0.0.1:5432/ecommerce_insight")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
@@ -129,9 +129,25 @@ def get_session():
     finally:
         session.close()
 
+def get_current_user(
+        x_api_key:str=Depends(api_key_header),
+        session=Depends(get_session)
+):
+    if not x_api_key:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail='获取不到token')
+    user=session.query(Users).filter(Users.api_key==x_api_key).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail='无效的token')
+    return user
+
+def require_admin(user=Depends(get_current_user)):
+    if not user.is_admin :
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,detail='不是管理员，没有操作权限')
+    return user
+
 app = FastAPI(title="电商经营数据洞察API")
 @app.get("/api/overview",name='经营总览：汇总＋趋势＋TopN三查询并行')
-async def get_overview(start:str|None=None, end:str|None=None, n:int = 5):
+async def get_overview(start:str|None=None, end:str|None=None, n:int = 5,user=Depends(get_current_user)):
     summary, trend, topn = await asyncio.gather(
         run_in_threadpool(q_summary, start, end),
         run_in_threadpool(q_trend, start, end),
@@ -141,7 +157,7 @@ async def get_overview(start:str|None=None, end:str|None=None, n:int = 5):
 
 
 @app.get("/api/categories",name ='返回全部品类及每个品类的订单量')
-def list_categories(session=Depends(get_session)):
+def list_categories(session=Depends(get_session),user=Depends(get_current_user)):
     """接口①：返回全部品类及每个品类的订单量"""
     rows = session.query(ProductType).all()
     sales = session.query(Orders.prd_id,func.count(Orders.id)).group_by(Orders.prd_id).all()
@@ -153,7 +169,7 @@ def list_categories(session=Depends(get_session)):
 
 
 @app.get("/api/gmv", name='按日期汇总销售额')
-def sum_gmv(start: str|None=None, end: str |None = None,session=Depends(get_session)):
+def sum_gmv(start: str|None=None, end: str |None = None,session=Depends(get_session),user=Depends(get_current_user)):
     start, end = resolve_range(session, start, end)
 
     gmv = session.query(func.sum(Orders.amount)).filter(Orders.order_time >= start
@@ -177,7 +193,7 @@ def sum_gmv(start: str|None=None, end: str |None = None,session=Depends(get_sess
 
 #趋势查询
 @app.get("/api/trend",name='按天销售趋势查询')
-def get_trend(start: str|None=None, end: str|None=None, session=Depends(get_session)):
+def get_trend(start: str|None=None, end: str|None=None, session=Depends(get_session),user=Depends(get_current_user)):
     start, end = resolve_range(session, start, end)
     gmv = session.query(func.date(Orders.order_time), func.sum(Orders.amount)).filter(Orders.order_time >= start
                                                                                       , Orders.order_time <= end
@@ -211,7 +227,7 @@ def get_trend(start: str|None=None, end: str|None=None, session=Depends(get_sess
 
 #返回topN的品类销售额和销量
 @app.get("/api/category/topn", name='按日期汇总返回topN的品类销售额和销量')
-def get_top(start: str|None=None, end: str|None=None, n:int =8,session=Depends(get_session)):
+def get_top(start: str|None=None, end: str|None=None, n:int =8,session=Depends(get_session),user=Depends(get_current_user)):
     start, end = resolve_range(session, start, end)
     sales = (session.query(Orders.prd_id, func.sum(Orders.amount), func.count(Orders.id)).filter(
         Orders.order_time >= start
@@ -236,8 +252,7 @@ def get_top(start: str|None=None, end: str|None=None, n:int =8,session=Depends(g
 #经营数据AI解读
 
 @app.get("/api/insight", name="按日期汇总解读经营数据")
-def get_insight(start: str|None=None, end: str|None=None,session=Depends(get_session)):
-
+def get_insight(start: str|None=None, end: str|None=None,session=Depends(get_session),user=Depends(get_current_user)):
     start, end = resolve_range(session, start, end)
     gmv = (session.query( func.sum(Orders.amount))
            .filter(Orders.order_time >= start, Orders.order_time <= end,Orders.status == '已完成').scalar())
@@ -286,10 +301,24 @@ def get_insight(start: str|None=None, end: str|None=None,session=Depends(get_ses
     return r
 
 
+@app.get("/api/me/order")
+def getuser_list_order(user=Depends(get_current_user),session=Depends(get_session)):
+    orders=session.query(Orders).filter(Orders.user_id == user.id).all()
+    logger.info (orders)
+    result =[]
+    for o in orders:
+        result.append({
+            "id": o.id,
+            "user_id": o.user_id,
+            "prd_name":id_to_name.get(o.prd_id),
+            "amount":o.amount
+        })
+    logger.info (result)
+    return result
+
 @app.post("/api/orders", status_code=201, name ='增加订单')
-def post_order(order:OrderIn,session = Depends(get_session)):
-    user_id=1 #先写死
-    o = Orders(order_time=datetime.now(), prd_id=order.prd_id, amount=order.amount, user_id=user_id,status=order.status)
+def post_order(order:OrderIn,session = Depends(get_session),user=Depends(get_current_user)):
+    o = Orders(order_time=datetime.now(), prd_id=order.prd_id, amount=order.amount, user_id=user.id,status=order.status)
     session.add(o)
     session.commit()
     session.refresh(o)
@@ -297,7 +326,7 @@ def post_order(order:OrderIn,session = Depends(get_session)):
 
 
 @app.post("/api/rag/ask")
-def post_rag(q: AskIn,session=Depends(get_session)):
+def post_rag(q: AskIn,session=Depends(get_session),user=Depends(require_admin)):
 
     question = q.question
 
@@ -364,3 +393,4 @@ def post_rag(q: AskIn,session=Depends(get_session)):
         "sources": [{"week": f"{t.iso_year}-W{t.iso_week:02d}", "content": t.report_text} for t in hits],
         "mode": "rag",
     }
+

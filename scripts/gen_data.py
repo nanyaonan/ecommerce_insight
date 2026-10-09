@@ -1,9 +1,10 @@
 import random
+import secrets
 from datetime import datetime, timedelta
 import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-from app.models import ProductType, Orders,Reports,Users
+from sqlalchemy.orm import sessionmaker
+from app.models import ProductType, Orders,Reports,Users,Base
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -12,17 +13,16 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-Base = declarative_base()
-
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 session = Session()
 
-Base.metadata.create_all(engine)
+Base.metadata.create_all(engine) #建表
 
 session.query(Orders).delete()
 session.query(Reports).delete()
 session.query(ProductType).delete()
+session.query(Users).delete()
 session.commit()
 products =[
     ProductType(prd_name='女装'),
@@ -38,6 +38,12 @@ products =[
 session.add_all(products)
 session.commit()
 
+users =[
+    Users( username='admin', is_admin=True, api_key=secrets.token_hex(32)),
+    Users( username='yn', is_admin=False, api_key=secrets.token_hex(32))
+]
+session.add_all(users)
+session.commit()
 name_to_id ={p.prd_name:p.id for p in session.query(ProductType).all()}
 id_to_name = {v: k for k, v in name_to_id.items()}
 

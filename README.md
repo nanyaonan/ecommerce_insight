@@ -1,6 +1,6 @@
 # ecommerce_insight：电商经营数据洞察 API
 
-> 一个用 FastAPI 搭的后端服务项目，从建库、写接口到接大模型，五天做完。
+> 一个用 FastAPI 搭的后端服务项目，从建库、写接口到接大模型，十天完成。
 > 主要目的是练手 + 作为一份能现场演示的材料，所以代码以「跑得通、讲得清」为目标，不是生产级工程。
 > 下面是它实际长什么样、以及过程中踩过的坑。
 
@@ -183,16 +183,17 @@ async def get_overview(start=None, end=None, n=5):
 
 ## 五、接口清单
 
-| # | 方法 | 路径 | 参数 | 说明 |
-|---|---|---|---|---|
-| ① | GET | `/api/categories` | — | 全部品类及各品类订单量 |
-| ② | GET | `/api/gmv` | `start`、`end`（可选） | 大盘 GMV、订单数、客单价 |
-| ③ | GET | `/api/trend` | `start`、`end`（可选） | 逐日 GMV 与订单趋势 |
-| ④ | GET | `/api/category/topn` | `start`、`end`、`n`（默认 8） | GMV TopN 品类排行榜 |
-| ⑤ | GET | `/api/insight` | `start`、`end`（可选） | AI 经营解读（实验） |
-| ⑥ | POST | `/api/orders` | 请求体 `prd_id`、`amount`、`status` | 下单写库，返回新订单 id |
-| ⑦ | POST | `/api/rag/ask` | 请求体 `question`、`top_k` | 周报问答（实验，效果一般） |
-| ⑧ | GET | `/api/overview` | `start`、`end`、`n`（默认 5） | 汇总＋趋势＋TopN 三查询并行，异步接口 |
+| # | 方法 | 路径 | 参数                                | 鉴权      | 说明                                  |
+|---|---|---|-------------------------------------|-----------|---------------------------------------|
+| ① | GET | `/api/categories` | —                                   |           | 全部品类及各品类订单量                |
+| ② | GET | `/api/gmv` | `start`、`end`（可选）              |           | 大盘 GMV、订单数、客单价              |
+| ③ | GET | `/api/trend` | `start`、`end`（可选）              |           | 逐日 GMV 与订单趋势                   |
+| ④ | GET | `/api/category/topn` | `start`、`end`、`n`（默认 8）       |           | GMV TopN 品类排行榜                   |
+| ⑤ | GET | `/api/insight` | `start`、`end`（可选）              | 管理员    | AI 经营解读（实验）                   |
+| ⑥ | POST | `/api/orders` | 请求体 `prd_id`、`amount`、`status` | token校验 | 下单写库，返回新订单 id               |
+| ⑦ | POST | `/api/rag/ask` | 请求体 `question`、`top_k`          |           | 周报问答（实验，效果一般）            |
+| ⑧ | GET | `/api/overview` | `start`、`end`、`n`（默认 5）       |           | 汇总＋趋势＋TopN 三查询并行，异步接口 |
+| ⑨ | GET | `/api/user/list/order` | —                                    |           | 查看当前用户的订单                    |
 
 全项目 GMV 口径统一：**只统计「已完成」订单**，五个接口的数字互相印证。
 

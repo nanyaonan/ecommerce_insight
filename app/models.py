@@ -46,6 +46,10 @@ class Users(Base):
     username = Column(String(200))
     # 用户角色是否管理员。
     is_admin = Column(Boolean,default=False)
+    # API_KEY
+    api_key=Column(String(200),unique=True, index=True)
+    api_key_prefix=Column(String(200),unique=True, index=True)
+    api_key_hash=Column(String(200),unique=True, index=True)
 
 
 from pydantic import BaseModel
